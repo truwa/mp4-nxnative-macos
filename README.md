@@ -15,7 +15,7 @@ Past that point you may run into graphical glitches, a crash, or something that 
 **Only one version is supported.** The app is made and tested for Metroid Prime 4: Beyond on Switch, version 1.1.0, title ID
 `010019A01E2F2000`. You need the base game plus the 1.1.0 update. Other versions won't work.
 
-**The first build takes a long time.** This game has around 260,000 shaders, the small programs that draw everything you see, and each one
+**The first build takes a long time.** This game seems to be an outlier with around 260,000 shaders, and each one
 has to be compiled for your Mac before it can be used. That happens once, on your own Mac, and takes about 2.5 hours on a Mac mini M4
 (longer on slower Macs). The finished build needs about 65 GB of disk space, and the build cleans up as it goes, so it never needs much more than that while it runs (plan for about 70 GB free).
 
