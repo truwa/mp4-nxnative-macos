@@ -1,0 +1,18 @@
+{
+  "_about": "Written by us after testing each app version. format: this version's build format. releases: for a build made with an earlier format, what the app tells the player: not needed / recommended / mandatory, with a one-line reason. The app also compares the build's recorded shader chain version and pack format with its own: a build this game program cannot load is mandatory whatever this table says (the table can raise that, never lower it).",
+  "format": 3,
+  "estimate": "about 15-30 minutes until you can play with Quick start; the rest compiles in the background",
+  "releases": {
+    "1": {
+      "status": "mandatory",
+      "note": "The shaders are now one library file and the compile cache one database (nxnative's storage), instead of millions of small files: safer, smaller and faster to build."
+    },
+    "2": {
+      "status": "mandatory",
+      "note": "The shaders now use nxnative's own storage (one library file and one cache database) instead of this app's earlier pack files; builds are also about a third faster."
+    }
+  },
+  "redo": [
+    "build"
+  ]
+}

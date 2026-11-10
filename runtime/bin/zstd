@@ -1,0 +1,14 @@
+#!/bin/sh
+# A minimal zstd for the build (it calls `zstd -d -c -q` with data on stdin, and only checks that zstd exists):
+# decompresses and compresses through the app's Python (backports.zstd). Python is two levels up: Runtime/../Python.
+HERE="$(cd "$(dirname "$0")" && pwd)"
+PY="${NX_PYTHON:-$HERE/../../Python/bin/python3}"
+[ -x "$PY" ] || PY=python3
+exec "$PY" -I -c '
+import sys
+from backports import zstd
+args = sys.argv[1:]
+data = sys.stdin.buffer.read()
+if "--version" in args or "-V" in args: print("zstd (launcher shim)"); sys.exit(0)
+sys.stdout.buffer.write(zstd.decompress(data) if "-d" in args else zstd.compress(data))
+' "$@"

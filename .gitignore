@@ -1,0 +1,11 @@
+.DS_Store
+nxnative/
+launcher/.build/
+launcher/dist/
+launcher-skeleton-2026-11-05/
+nxnative-diag/
+nxnative-up/
+*.noindex/
+__pycache__/
+dev/
+release.noindex/

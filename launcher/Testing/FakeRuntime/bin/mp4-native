@@ -1,0 +1,8 @@
+#!/bin/sh
+# Fake game binary: logs to stderr like the real one and exits after a few seconds.
+echo "fake mp4-native args: $*" >&2
+echo "cwd: $(pwd)" >&2
+env | grep -E '^(TOTK_|MP4_)' | sort >&2
+for i in 1 2 3 4 5 6; do echo "frame $i" >&2; sleep 1; done
+echo "fake exit" >&2
+exit "${FAKE_GAME_EXIT:-0}"

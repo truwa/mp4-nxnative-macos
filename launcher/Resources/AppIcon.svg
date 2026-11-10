@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- MP4 Launcher icon: an abstract scan ring (our own drawing; nothing from the game). Edit and run make app. -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#16303d"/>
+      <stop offset="1" stop-color="#0a141b"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#3fe0d0" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#3fe0d0" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <!-- macOS icon grid: 824 x 824 rounded square inside the 1024 canvas -->
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#bg)"/>
+  <rect x="100.5" y="100.5" width="823" height="823" rx="184.5" fill="none" stroke="#ffffff" stroke-opacity="0.08" stroke-width="1"/>
+  <circle cx="512" cy="512" r="300" fill="url(#glow)"/>
+  <g fill="none" stroke="#3fe0d0" stroke-linecap="round">
+    <!-- outer ring in four arcs -->
+    <circle cx="512" cy="512" r="300" stroke-width="22" stroke-dasharray="380 91.24" transform="rotate(-45 512 512)"/>
+    <!-- middle ring, thinner, offset gaps -->
+    <circle cx="512" cy="512" r="215" stroke-width="14" stroke-opacity="0.85" stroke-dasharray="290 47.72" transform="rotate(20 512 512)"/>
+    <!-- inner ring -->
+    <circle cx="512" cy="512" r="130" stroke-width="10" stroke-opacity="0.7"/>
+    <!-- tick marks on the outer ring -->
+    <g stroke-width="10" stroke-opacity="0.9">
+      <line x1="512" y1="170" x2="512" y2="200"/>
+      <line x1="512" y1="824" x2="512" y2="854"/>
+      <line x1="170" y1="512" x2="200" y2="512"/>
+      <line x1="824" y1="512" x2="854" y2="512"/>
+    </g>
+  </g>
+  <!-- scan sweep -->
+  <path d="M512 512 L724 300 A300 300 0 0 1 812 512 Z" fill="#3fe0d0" fill-opacity="0.16"/>
+  <line x1="512" y1="512" x2="724" y2="300" stroke="#9ff5ec" stroke-width="8" stroke-linecap="round"/>
+  <!-- center -->
+  <circle cx="512" cy="512" r="34" fill="#9ff5ec"/>
+  <circle cx="512" cy="512" r="58" fill="none" stroke="#3fe0d0" stroke-width="6" stroke-opacity="0.8"/>
+</svg>
