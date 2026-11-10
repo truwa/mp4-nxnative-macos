@@ -29,7 +29,7 @@ You can also stop the build and pick it up later; nothing is lost.
 nxnative does the heavy lifting of running Switch games natively on a Mac. For this game we added, among other things:
 
 - **Fixes for this game**, including several graphical issues and crashes we found while playing.
-- **Higher resolutions** without any mods: 1080p, 1440p, 4K, 5K and 8K, plus two ultrawide sizes, made from the game's own code.
+- **Higher resolutions**: 1080p, 1440p, 4K, 5K and 8K, plus two ultrawide sizes, made from the game's own code.
 - **A scan visor that works at higher resolutions.** At higher sizes the game's scanner used to find nothing; it works again (it may still show a few extra targets).
 - **Quick start** and a faster, multi-process shader build with pause-resume and a time estimate made on your own Mac.
 - **A build that needs much less disk space:** it cleans up as it goes, so it never needs much more than the finished size.
