@@ -3,7 +3,9 @@ MP4 nxnative 0.3 beta
 
 MP4 nxnative builds Metroid Prime 4: Beyond from your own copy of the game and plays it natively on an
 Apple silicon Mac. Nothing from the game is included: you bring your own game files and keys.
-Not affiliated with or endorsed by Nintendo. This is a beta: expect rough edges.
+Not affiliated with or endorsed by Nintendo. This is a beta: on a Mac mini M4 the game runs at 60 fps,
+with some stutters, especially when entering a new room or area. The whole game hasn't been tested yet:
+it has been played up to the beginning of Sol Valley without major issues.
 
 Install
 -------
@@ -23,9 +25,11 @@ What you need
 
 Building
 --------
-The first build compiles about 260,000 shaders for your Mac: about 3 hours on a Mac mini M4.
+The first build compiles about 260,000 shaders for your Mac: about 2.5 hours on a Mac mini M4.
 With Quick start (on by default) you can play after about 10 minutes while the rest compiles in the
-background; you can stop the build and continue later. Your saves stay in the build folder.
+background; you can stop the build and continue later. Quick start covers the shaders we recorded
+up to the Carvex boss fight: playing past it before the full build has finished is not recommended.
+Your saves stay in the build folder.
 
 Don't move or delete the build folder in Finder; use the app's own Remove and Change buttons, so the
 app always knows where your build is.
@@ -43,9 +47,8 @@ MP4 nxnative > Check for Updates looks for a newer release, downloads it and rep
 
 Known limits
 ------------
-- Areas past the start of the game compile their shaders in the background during a Quick start build.
 - At higher resolutions the scan visor works, but it may show a few extra scan targets.
-- Short stutters when entering an area for the first time.
+- Stutters, especially when entering a new room or area.
 - Mods (frame rate, level of detail) are held back for a later release.
 
 Credits
