@@ -10,9 +10,28 @@ struct MP4LauncherApp: App {
 
     init() {
         NSApplication.shared.setActivationPolicy(.regular)
+        Self.quitIfAnotherCopyRuns()
         let m = AppModel()
         _model = State(initialValue: m)
         AppDelegate.model = m
+    }
+
+    /// One copy of the app at a time (2026-11-11: a developer build left open beside the release showed another build folder, and both share
+    /// Application Support/mp4nxnative): another copy running is brought forward, this one says where it is and quits before any window opens.
+    private static func quitIfAnotherCopyRuns() {
+        guard let id = Bundle.main.bundleIdentifier else { return }
+        let me = ProcessInfo.processInfo.processIdentifier
+        guard let other = NSRunningApplication.runningApplications(withBundleIdentifier: id).first(where: { $0.processIdentifier != me && !$0.isTerminated }) else { return }
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        let place = (other.bundleURL?.path ?? "another place").replacingOccurrences(of: home, with: "~")
+        NSApplication.shared.activate()
+        let a = NSAlert()
+        a.messageText = "MP4 nxnative is already open"
+        a.informativeText = "Another copy of the app is running (\(place)). Two copies share the same settings and build folder, so this one closes and the open one comes forward. To use this copy, quit the other one first."
+        a.addButton(withTitle: "OK")
+        a.runModal()
+        other.activate()
+        exit(0)
     }
 
     var body: some Scene {

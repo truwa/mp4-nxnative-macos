@@ -1,0 +1,51 @@
+name: Bug report
+description: Something in the app, the build or the game does not work as it should
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. The log is what lets us find the cause: please attach it.
+        Never attach game files, keys (prod.keys) or anything from your dumps.
+  - type: input
+    id: app
+    attributes:
+      label: App version
+      description: In the app's menu, About MP4 nxnative (for example "0.3.1 beta (20261112.1200)")
+    validations:
+      required: true
+  - type: input
+    id: mac
+    attributes:
+      label: Mac and macOS
+      description: For example "Mac mini M4, 16 GB, macOS 26.1"
+    validations:
+      required: true
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where did it happen?
+      options:
+        - While building
+        - Starting the game / the Play button
+        - In the game
+        - Somewhere else in the app
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+      description: The steps that lead to it, the settings you use (resolution, Quick start, storage), and a screenshot if it shows the problem.
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: Log
+      description: |
+        Building: the Build window's Details, or the newest build-*.log in your build folder's logs folder.
+        Playing: "Copy diagnostics" in Settings (the gear) or in the Play window after a crash (it leaves out keys and file contents), or the newest log in the same logs folder.
+        Drag the log file here, or paste it.
+    validations:
+      required: true

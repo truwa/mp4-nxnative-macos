@@ -1,5 +1,5 @@
-MP4 nxnative 0.3 beta
-=====================
+MP4 nxnative 0.3.1 beta
+=======================
 
 MP4 nxnative builds Metroid Prime 4: Beyond from your own copy of the game and plays it natively on an
 Apple silicon Mac. Nothing from the game is included: you bring your own game files and keys.
@@ -39,7 +39,8 @@ buttons follow a Switch's layout by position by default; Settings > Controls cha
 Updates
 -------
 MP4 nxnative > Check for Updates looks for a newer release, downloads it and replaces the app
-(not while the game or a build runs). After an update the app may offer to refresh the build's tools.
+(not while the game or a build runs). After an update the app refreshes the build's game program once, by itself
+(about 30 seconds).
 
 Known limits
 ------------

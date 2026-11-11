@@ -140,6 +140,7 @@ final class BuildController {
         args += ["--storage", settings.storage]
         if settings.testBuild { args.append("--test") } else if settings.quickStart { args.append("--quick-start") }
         if settings.threadsOnly { args.append("--threads-only") }
+        if mode == .updateTools { args.append("--update-program") }   // only the game program, into a finished build of an earlier app version
         args += ["--priority", priority]
         record("$ nx_build.py " + (mode == .updateTools ? "(update tools)" : mode == .fromScratch ? "(from scratch)" : mode == .rebuild ? "(rebuild: \(settings.runtimeBuildFormat.redo.joined(separator: ", ")))" : "(continue)")
                + " · app \(AppSettings.appVersion) · runtime \(settings.runtimeVersion ?? "?")")

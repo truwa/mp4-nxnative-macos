@@ -50,6 +50,7 @@ struct PlayWindow: View {
         }
         .background(CloseGuard(model: model))
         .onAppear { s.applyAppearance(); model.shaders.refreshReport(settings: s); model.installToolsIfNeeded() }
+        .onChange(of: s.cacheURL) { model.installToolsIfNeeded() }   // another build folder: its own state (a found build, an older game program)
         .onChange(of: model.build.state) { _, st in
             if st == .done, model.build.mode == .updateTools { model.build.reset(); model.shaders.refreshReport(settings: s) }
         }
@@ -77,23 +78,37 @@ struct PlayWindow: View {
 
     // MARK: Everyday settings, one row
 
+    /// One row when it fits; with a long size name ("2880p ultrawide") the gaps shrink, then the switches go to a second line. Every part keeps its own
+    /// width (fixedSize): the label was the only flexible part and wrapped letter by letter with an ultrawide size (user's screenshot, 2026-11-11)
     private var controlsRow: some View {
-        @Bindable var b = s
-        return HStack(spacing: 28) {
-            HStack(spacing: 6) {
-                Text("Resolution")
-                Menu {
-                    ForEach(s.resolutionOptions, id: \.size) { o in resolutionItem(o) }   // a fixed list: every size comes from the game's own code (user, 2026-11-09)
-                } label: { Text(s.resolutionShort) }
-                .fixedSize()
-            }
-            .help("900p is the game's own size. The other sizes are made from the game's own code, the scan visor included. Applied when the game starts: no rebuild.")
-            Toggle("Game Mode", isOn: $b.gameMode).toggleStyle(.switch)
-                .help("macOS Game Mode while the game is fullscreen: CPU and GPU priority for the game, lower latency for Bluetooth controllers. Applied when the game starts.")
-            Toggle("Metal HUD", isOn: $b.metalHUD).toggleStyle(.switch)
-                .help("Apple's overlay: frame rate, frame time and memory.")
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 28) { resolutionControl; switches(spacing: 28) }
+            HStack(spacing: 14) { resolutionControl; switches(spacing: 14) }
+            VStack(spacing: 10) { resolutionControl; switches(spacing: 28) }
         }
         .frame(maxWidth: .infinity)
+    }
+
+    private var resolutionControl: some View {
+        HStack(spacing: 6) {
+            Text("Resolution").fixedSize()
+            Menu {
+                ForEach(s.resolutionOptions, id: \.size) { o in resolutionItem(o) }   // a fixed list: every size comes from the game's own code (user, 2026-11-09)
+            } label: { Text(s.resolutionShort) }
+            .fixedSize()
+        }
+        .fixedSize()
+        .help("900p is the game's own size. The other sizes are made from the game's own code, the scan visor included. Applied when the game starts: no rebuild.")
+    }
+
+    private func switches(spacing: CGFloat) -> some View {
+        @Bindable var b = s
+        return HStack(spacing: spacing) {
+            Toggle("Game Mode", isOn: $b.gameMode).toggleStyle(.switch).fixedSize()
+                .help("macOS Game Mode while the game is fullscreen: CPU and GPU priority for the game, lower latency for Bluetooth controllers. Applied when the game starts.")
+            Toggle("Metal HUD", isOn: $b.metalHUD).toggleStyle(.switch).fixedSize()
+                .help("Apple's overlay: frame rate, frame time and memory.")
+        }
     }
 
     /// A menu item: a checkmark on the chosen size; the app-built sizes carry a ✦.
@@ -119,9 +134,10 @@ struct PlayWindow: View {
 
     private var status: Status? {
         if model.build.isRunning, model.build.mode == .updateTools {
-            return Status(text: "Installing this version's tools…", symbol: "arrow.triangle.2.circlepath", busy: true)
+            return Status(text: "Updating the game program for this version…", symbol: "arrow.triangle.2.circlepath", busy: true)
         }
         if !s.gameReady {
+            if let t = model.foundBuildText { return Status(text: t, symbol: "checkmark.circle", buttons: [("Use it", { model.useFoundBuild() })]) }
             if s.buildUnfinished { return Status(text: "The build wasn't finished", symbol: "exclamationmark.circle", buttons: [("Finish building", showBuild)]) }
             return Status(text: "The game isn't built yet", symbol: "hammer", buttons: [("Build", showBuild)])
         }

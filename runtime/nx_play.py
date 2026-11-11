@@ -53,6 +53,8 @@ def main():
     if a.res != 'native':
         # The size's rows come from the game's own code (runtime_patches.py, res_sites.py) for any size, the scan visor's readback included (2026-11-09): no pack, no cheat
         genv['DM_MP4_RES'] = a.res
+        if (m := re.fullmatch(r'(\d{3,5})x(\d{3,5})', a.res)) and int(m[1]) * 9 != int(m[2]) * 16:
+            genv.setdefault('DM_PICTURE_SHAPE', a.res)   # an ultrawide size: the picture is shown in its own shape, not squeezed into the game's 16:9 layer (nvn_mtl.m present_shape)
     old_cheat = game / 'cheats' / f'{BUILD}.txt'   # a pack's scan-fix cheat an earlier version copied here: inert with our rows, and it made every start report cheats on
     if old_cheat.exists() and 'Fix scan at high res' in old_cheat.read_text(errors='replace'): old_cheat.unlink()
     if a.dynres == 'off': genv['DM_MP4_DYNRES'] = 'off'

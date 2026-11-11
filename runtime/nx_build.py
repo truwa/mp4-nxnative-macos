@@ -441,6 +441,76 @@ def quick_part_done(game, work, rt):
     return bool(keys) and all(k in have for k in keys)
 
 
+def check_ready(game, work, rt, write=False):
+    """Read only (unless write): whether this folder holds a playable build, whatever ready.json says (missing: deleted, or a build that stopped before writing it;
+    a player who ran nx_play.py by hand found the game playable with Play greyed, Reddit 2026-11-11). Needs the game program, the patched code, the game data and
+    this app's shader library image b-<chain>.img: all shaders of the shader map = finished (partial while the build's log has no "# finished" line: Continue does
+    the rest), the quick-start set = partial, fewer = not playable. Prints READY finished|partial|none <reason>; with write, a playable build gets its ready.json"""
+    def newest(folder, pattern, need=None):
+        found = sorted((p for p in folder.glob(pattern) if p.is_dir() and (need is None or (p / need).exists())), key=lambda p: p.name) if folder.is_dir() else []
+        return found[-1] if found else None
+    def no(reason): out(f'READY none {reason}'); return 1
+    chain = chain_of(rt / 'nxnative')
+    if not chain: return no('this app has no shader chain header')
+    if not os.access(work / 'tools/dmhost', os.X_OK): return no('no game program (build.noindex/tools/dmhost)')
+    if not newest(work, 'patched_v*', 'main.patched.bin'): return no('no patched game code (build.noindex/patched_v*)')
+    if not newest(work / 'extract', 'v*', 'RomFS.img'): return no('no game data (build.noindex/extract/v*/RomFS.img)')
+    img = work / f'shader/cache/b-{chain}.img'
+    if not img.is_file():
+        other = sorted(p.name for p in (work / 'shader/cache').glob('b-*.img')) if (work / 'shader/cache').is_dir() else []
+        return no(f'shaders of another app version ({", ".join(other)}): this app needs a rebuild' if other else 'no shaders compiled yet')
+    sys.path.insert(0, str(rt / 'nxnative/dm/tools'))
+    try:
+        import romfs
+        have = {p.name[:16] for p in romfs.Path(str(img)).iterdir() if p.name.endswith('_b.json')}
+    except Exception as e: return no(f'the shader library could not be read: {e}')
+    smap = rt / f'nxnative/dm/games/{TITLE}/shader_map.tsv'
+    want = {f[3] for f in (ln.split('\t') for ln in smap.read_text().splitlines() if ln and not ln.startswith('#')) if len(f) > 3 and re.fullmatch(r'[0-9a-f]{16}', f[3])}
+    rec = game / 'recorded_shaders.txt'
+    if not rec.is_file(): rec = rt / 'recorded_shaders.txt'
+    quick = [ln.strip() for ln in rec.read_text().splitlines() if ln.strip() and not ln.startswith('#')] if rec.is_file() else []
+    times = game / 'logs/build-times.tsv'
+    finished = times.is_file() and any(ln.startswith('# finished') for ln in times.read_text(errors='replace').splitlines())
+    n = len(want & have)
+    if want and n == len(want): state = 'finished' if finished else 'partial'
+    elif quick and all(k in have for k in quick): state = 'partial'
+    else: return no(f'{n:,} of {len(want):,} shaders compiled, the quick-start set not complete: continue the build')
+    out(f'READY {state} {n:,} of {len(want):,} shaders, chain {chain}')
+    if write:
+        try: fmt = json.loads((rt / 'build-format.json').read_text()).get('format', 1)
+        except (OSError, ValueError): fmt = 1
+        info = {'title_id': TITLE, 'version': '1.1.0', 'built': datetime.datetime.fromtimestamp(img.stat().st_mtime).strftime('%Y-%m-%dT%H:%M:%S'),
+                'runtime': '?', 'build_format': fmt, 'chain': chain, 'pack_format': 3,
+                'storage': 'normal' if (work / 'shader/cache/cas.db').is_file() else 'minimal', 'restored': True}   # runtime '?': the app updates the game program next
+        if state == 'partial': info['partial'] = True
+        (game / 'ready.json').write_text(json.dumps(info) + '\n')
+        log(f'ready.json written for a {state} build found in the folder')
+    return 0
+
+
+def update_program(game, work, repo, rt, py, env):
+    """A finished build made with an earlier app of the same shader chain gets this app's game program: build_mac_host only (the build's own reuse key decides
+    whether it compiles), then ready.json's runtime is this app's. Game data, shaders, pipelines and saves are not touched"""
+    try: ready = json.loads((game / 'ready.json').read_text())
+    except (OSError, ValueError): out('ERROR There is no build here to update'); return 1
+    chain = chain_of(repo)
+    if ready.get('chain') and chain and ready['chain'] != chain:
+        out('ERROR This build\'s shaders are from another app version: it needs a rebuild'); return 1
+    ver = (rt / 'VERSION').read_text().strip() if (rt / 'VERSION').exists() else '?'
+    out('PROGRESS host 10 Building the game program')
+    t0 = time.time()
+    code = ('import os, sys, types; from pathlib import Path; sys.path.insert(0, sys.argv[1]); import build_ipa_from_nsp as b; '
+            'b.build_mac_host(Path(sys.argv[2]), Path(sys.argv[3]), dict(os.environ), Path(sys.argv[4]), types.SimpleNamespace(id=sys.argv[5]))')
+    r = subprocess.run([py, '-c', code, str(repo / 'scripts'), str(repo), str(work / 'tools/dmhost'), str(work / 'logs'), TITLE], env=env, capture_output=True, text=True)
+    for line in (r.stdout + r.stderr).splitlines(): log(line)
+    if r.returncode: out('ERROR The game program could not be built. The details have the reason.'); return 1
+    ready['runtime'] = ver
+    (game / 'ready.json').write_text(json.dumps(ready) + '\n')
+    log(f'game program updated to {ver} in {time.time() - t0:.0f} s')
+    out('PROGRESS host 100 The game program is up to date'); out('DONE')
+    return 0
+
+
 def merged_recording(recorded, game, repo):
     """The quick start's list: the app's recording (Runtime/recorded_shaders.txt, its first line names the game version it was made on), then the shaders this player met
     in play that it lacks (logs/shaders-played.tsv, which every Play appends to: DM_PSO_RECORD), each in first-use order, into <game folder>/recorded_shaders.txt.
@@ -481,12 +551,16 @@ def main():
     ap.add_argument('--until-split', action='store_true', help='only the quick steps (game data, rewrite, split), then exit: the speed test\'s shader packages')
     ap.add_argument('--estimate-first', action='store_true', help='kept for older apps: every fresh build now estimates itself (see the in-build estimate)')
     ap.add_argument('--optimise', action='store_true', help='give back what a finished build no longer needs (an earlier app\'s build), then exit')
+    ap.add_argument('--update-program', action='store_true', help='a build made with an earlier app of the same shader chain: build only the game program with this app\'s tools, then exit')
+    ap.add_argument('--check-ready', action='store_true', help='read only: whether this folder holds a playable build (ready.json missing or not); prints READY finished|partial|none <reason>')
+    ap.add_argument('--write', action='store_true', help='with --check-ready: write ready.json for a playable build')
     ap.add_argument('--threads-only', action='store_true', help='the shader step in one process with threads (DMSH_PROCS=0) instead of a worker process per core: for comparison')
     ap.add_argument('--priority', choices=('normal', 'low', 'background'), default='normal', help="the build's priority: low = the utility QoS clamp (the game first; about a third slower on the M4). "
                     "Changed while the build runs through <game folder>/logs/priority (the app writes it: low while the game runs): the shader pass restarts under the new clamp, "
                     "finished shaders are kept. 'background' (macOS's background class) measured 7x slower on an idle M4 (2026-11-09) and is taken as low")
     a = ap.parse_args()
     game, rt = Path(a.out), Path(a.runtime)
+    if a.check_ready: return check_ready(game, game / 'build.noindex', rt, a.write)   # before anything is created in the folder
     logs = game / 'logs'; logs.mkdir(parents=True, exist_ok=True)
     stamps = game / '.stamps'; stamps.mkdir(exist_ok=True)
     work = game / 'build.noindex'; work.mkdir(exist_ok=True)
@@ -530,7 +604,7 @@ def main():
     files = [p for p in (a.base, a.update) if p]
     inputs = game / 'inputs'
     if files: link_inputs(inputs, files)
-    elif not inputs.exists():
+    elif not inputs.exists() and not a.update_program:
         out('ERROR Choose the base game and the 1.1.0 update'); return 1
 
     py = sys.executable
@@ -539,6 +613,8 @@ def main():
     env.update(DM_TOOLS_FIRST='1', DOTNET_ROOT=str(rt / 'dotnet'), DOTNET_NOLOGO='1', DOTNET_CLI_TELEMETRY_OPTOUT='1',
                DOTNET_SKIP_FIRST_TIME_EXPERIENCE='1', DM_NX_EXTRACT_PREBUILT=str(rt / 'nx_extract'), PYTHONDONTWRITEBYTECODE='1',
                )
+    if a.update_program:   # a finished build made with an earlier app: only the game program again (build_mac_host: ~30 s on the M4), nothing else touched
+        return update_program(game, work, repo, rt, py, env)
     # The shader step: a worker process per core by default (dmsh_build.py's DMSH_PROCS = cores; the speed test on the M4, 2026-11-08: ~1/3 faster than threads)
     env['DMSH_PROCS'] = '0' if a.threads_only else str(os.cpu_count() or 8)
     log(f"shader step: {'threads only' if a.threads_only else env['DMSH_PROCS'] + ' worker processes'}")
@@ -720,6 +796,7 @@ def main():
         with times.open('a') as t: t.write(f"# end {datetime.datetime.now():%Y-%m-%d %H:%M:%S}\texit {code}\ttotal {total:.0f} s\n")
         log(space_summary())
         if code != 0:
+            log(f"ready.json not written: the build stopped (exit {code})" + (f": {state['last_red']}" if state['last_red'] else ''))
             out('ERROR ' + (state['last_red'] or f'The build stopped (code {code}). The details have the reason.')); return code
         for s_ in ('code', 'romfs', 'build'): (stamps / s_).touch()
         if not (extra or {}).get('partial') and not (extra or {}).get('test'):

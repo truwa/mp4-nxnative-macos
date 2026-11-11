@@ -23,12 +23,14 @@ struct BuildWindow: View {
             // the build makes. The player may still turn it off for this build; an unfinished build keeps its own choice.
             let s = model.settings
             if !s.gameReady && !s.buildUnfinished && !s.quickStart { s.quickStart = true }
+            model.installToolsIfNeeded()   // a found build without ready.json, an older game program
             // Closing this window goes back to the Play window when a build is playable (QuitGuard.backToPlay), instead of quitting the launcher
             QuitGuard.backToPlay = { [openWindow] in
                 guard model.settings.gameReady else { return false }
                 openWindow(id: "play"); return true
             }
         }
+        .onChange(of: model.settings.cacheURL) { model.installToolsIfNeeded() }   // another build folder: its own state
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.willCloseNotification)) { note in
             // ⌘W / File > Close skip the close button's guard: the same way back to Play when this is the last launcher window
             guard let w = note.object as? NSWindow, w.title == QuitGuard.buildTitle, !QuitGuard.quitting else { return }
@@ -53,6 +55,7 @@ private struct Checklist: View {
     @State private var detected: RyujinxFinder.Result?
     @State private var askMode = false
     @State private var askStartOver = false
+    @State private var askNoChangeRebuild = false
     /// A fresh build: what to expect, once, before it starts (the build estimates its own time in its first minutes)
     @State private var showInfo = false
     @State private var noindexChoice: (plain: URL, noindex: URL)?
@@ -100,6 +103,7 @@ private struct Checklist: View {
 
             if s.oldLayoutBuild { oldLayoutBanner }
             if s.rebuildRecommended { rebuildBanner }
+            if let t = model.foundBuildText { foundBanner(t) }
             if let note = existingNote {
                 Label(note, systemImage: "info.circle").font(.callout).foregroundStyle(.secondary)
                     .padding(10).frame(maxWidth: .infinity, alignment: .leading)
@@ -111,13 +115,16 @@ private struct Checklist: View {
             HStack {
                 Button("Build speed test…") { openWindow(id: "speedtest") }
                     .help("Compiles a sample of the shaders and estimates the full build's time on this Mac")
-                Text(blocker ?? (s.buildUnfinished ? "Ready to continue" : "Ready to build")).font(.callout).foregroundStyle(blocker == nil ? Color.secondary : Color.red)
+                Text(blocker ?? statusText).font(.callout).foregroundStyle(blocker == nil ? Color.secondary : Color.red)
                     .padding(.leading, 6)
                 Spacer()
                 if s.buildUnfinished {   // an unfinished build can start over (user, 2026-11-09): game data and code again; keys, saves and the compile cache stay
                     Button("Start over…") { askStartOver = true }.disabled(blocker != nil)
                 }
-                if s.buildPartial {   // playable: Play now is the default (blue) button, Continue building the plain one (user, 2026-11-09)
+                if builtAndPlayable {   // a finished build: Play is the default (blue) button; a rebuild is there, but says it is not needed (user, 2026-11-11)
+                    if !s.rebuildRecommended { Button("Rebuild (not needed)…") { askNoChangeRebuild = true }.controlSize(.large).disabled(blocker != nil) }
+                    Button("Play") { openPlay() }.keyboardShortcut(.defaultAction).controlSize(.large)
+                } else if s.buildPartial {   // playable: Play now is the default (blue) button, Continue building the plain one (user, 2026-11-09)
                     Button("Play now") { openPlay() }.keyboardShortcut(.defaultAction).controlSize(.large)
                     Button("Continue building") { start() }.controlSize(.large).disabled(blocker != nil)
                 } else {
@@ -144,6 +151,16 @@ private struct Checklist: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("About 260,000 shaders are compiled for your Mac. This takes a few hours (about 2 h 40 min on a Mac mini M4). A time estimate appears in about 3 minutes." + (s.quickStart ? "\n\nWith Quick start you can play after about 10 minutes while the rest compiles." : "\n\nTurn on Quick start to play after about 10 minutes while the rest compiles."))
+        }
+        .alert("Rebuild with nothing changed?", isPresented: $askNoChangeRebuild) {
+            Button("Cancel", role: .cancel) {}
+            Button("Rebuild", role: .destructive) { model.build.start(settings: s, mode: .fromScratch) }
+        } message: {
+            Text("This build is up to date: this version of the app would make the same game. A rebuild makes the game data and code again"
+                 + ((s.readyInfo?["storage"] as? String ?? s.storage) == "minimal"
+                    ? " and compiles every shader again (this build kept no compile cache): about as long as the first build (about 2 h 40 min on a Mac mini M4)."
+                    : "; the shaders come back from this build's compile cache, which is much faster than the first build.")
+                 + " Your saves and keys are kept. Only useful when the game misbehaves and you want to rule out a damaged build.")
         }
         .confirmationDialog("Start this build over?", isPresented: $askStartOver) {
             Button("Start over", role: .destructive) { model.build.start(settings: s, mode: .fromScratch) }
@@ -406,11 +423,34 @@ private struct Checklist: View {
     // MARK: Start
 
     private var existingNote: String? {
-        if s.gameReady && !s.buildUnfinished {
+        if s.gameReady && !s.buildUnfinished && s.rebuildRequired {
             return "This folder already has a build (1.1.0, built \(shortDate(s.builtDate)), runtime \(s.builtRuntimeVersion ?? "?")). Building again keeps your saves and prepared shaders; you'll be asked first."
         }
-        if s.buildUnfinished { return nil }   // continueBox says it
-        return nil
+        return nil   // a playable finished build: the status line says it; an unfinished one: continueBox says it
+    }
+
+    /// A finished build this app can play (an up-to-date one, or one whose rebuild is only recommended).
+    private var builtAndPlayable: Bool { s.gameReady && !s.buildUnfinished && !s.rebuildRequired }
+
+    private var statusText: String {
+        if builtAndPlayable { return "Built 1.1.0 on \(shortDate(s.builtDate))" + (s.rebuildRecommended ? " · a rebuild is recommended" : " · up to date") }
+        return s.buildUnfinished ? "Ready to continue" : "Ready to build"
+    }
+
+    /// A build found in the folder without its ready.json (nx_build.py --check-ready): "Use it" writes the record, nothing is built.
+    private func foundBanner(_ text: String) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.green).font(.title3)
+            VStack(alignment: .leading, spacing: 3) {
+                Text("A playable build is in this folder").font(.headline)
+                Text(text + " Use it to play it as it is: nothing is built again.")
+                    .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer()
+            Button("Use it") { model.useFoundBuild() }.controlSize(.large).disabled(model.build.isRunning)
+        }
+        .padding(12)
+        .background(Color.green.opacity(0.1), in: RoundedRectangle(cornerRadius: 10))
     }
 
     private var blocker: String? {

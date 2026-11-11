@@ -309,7 +309,10 @@ final class AppSettings {
 
     // MARK: Build state
 
-    var gameReady: Bool { FileManager.default.fileExists(atPath: readyURL.path) }
+    var gameReady: Bool { _ = readyRevision; return FileManager.default.fileExists(atPath: readyURL.path) }
+    /// Bumped when ready.json is written outside a build (a found build's "Use it"), so the windows look again
+    private var readyRevision = 0
+    func readyChanged() { readyRevision += 1 }
     var gameBinaryPresent: Bool { FileManager.default.isExecutableFile(atPath: gameBinaryURL.path) }
     /// Quick start's first part is done but the background part is not (ready.json "partial"): playable, unfinished.
     var buildPartial: Bool { readyInfo?["partial"] as? Bool == true }
@@ -381,7 +384,12 @@ final class AppSettings {
     var rebuildRequired: Bool { if case .mandatory = rebuildStatus { return true }; return false }
 
     /// The app carries newer tools than the build folder has.
-    var toolsOutdated: Bool { false }   // nxnative: a new app's tools are installed by the next build (nx_build.py), never on their own
+    /// A finished build whose game program another version of this app made (ready.json "runtime"), with the same shader chain: the game program is
+    /// built again into it (AppModel.installToolsIfNeeded, nx_build.py --update-program, about 30 s). A build that needs a rebuild gets it from the rebuild
+    var toolsOutdated: Bool {
+        guard gameReady, !buildUnfinished, !rebuildRequired, let mine = runtimeVersion else { return false }
+        return builtRuntimeVersion != mine
+    }
 
     /// The space a build takes with each storage option (estimates from 3,000-shader test builds scaled to the 260,000 shaders,
     /// to be corrected after the first full build). The shaders live in a few pack files that store identical libraries once,

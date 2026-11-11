@@ -10,8 +10,8 @@
     <key>CFBundleDisplayName</key><string>MP4 nxnative</string>
     <key>CFBundleIconFile</key><string>AppIcon</string>
     <key>CFBundlePackageType</key><string>APPL</string>
-    <key>CFBundleShortVersionString</key><string>0.3.0</string>
-    <key>MP4Version</key><string>0.3.0-beta</string>
+    <key>CFBundleShortVersionString</key><string>0.3.1</string>
+    <key>MP4Version</key><string>0.3.1-beta</string>
     <key>CFBundleVersion</key><string>1</string>
     <key>LSMinimumSystemVersion</key><string>26.0</string>
     <key>LSApplicationCategoryType</key><string>public.app-category.games</string>
