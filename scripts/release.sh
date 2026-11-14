@@ -65,33 +65,24 @@ found.sort(reverse=True)
 for _, p, exe in found:
     cmd = ['codesign', '--force', '--sign', identity, '--options', 'runtime', '--timestamp'] + (['--entitlements', ent] if exe else []) + [p]
     subprocess.check_call(cmd, stdout=subprocess.DEVNULL)
-# The engine compiles shaders only with the translator and spirv-cross whose fingerprints (sha256 of the files) are in dmsh_chain.lock, and signing has just changed
-# both files: 0.4.0-beta as first published (2026-11-14) stopped at the first shader on every Mac ("translation chain tools do not match the lock file"), Mac and iOS
-# builds alike. The app's copy of the lock gets the signed files' fingerprints, before the app is sealed. The lock is outside the shader chain version (dmsh_chain.py):
-# builds made by the unsigned developer app stay valid.
-import hashlib
-tools = os.path.join(root, 'Contents/Resources/Runtime/nxnative/dm/gfx/tools')
-lock = os.path.join(tools, 'dmsh_chain.lock')
-want = {'dmsh_xlate': os.path.join(tools, 'dmsh_xlate_bin/dmsh_xlate'), 'spirv-cross': os.path.join(tools, 'spirv_cross_bin/spirv-cross')}
-lines, seen = [], set()
-for ln in open(lock).read().splitlines():
-    k = ln.split('\t')[0]
-    if k in want:
-        ln = k + '\t' + hashlib.sha256(open(want[k], 'rb').read()).hexdigest()[:16]; seen.add(k)
-    lines.append(ln)
-if seen != set(want): sys.exit(f'dmsh_chain.lock has no line for {sorted(set(want) - seen)}: the lock format changed, look at tool_lock.py')
-open(lock, 'w').write('\n'.join(lines) + '\n')
-print('the lock file has the signed tools\' fingerprints: ' + ', '.join(l.replace('\t', ' ') for l in lines if l.split('\t')[0] in want))
 subprocess.check_call(['codesign', '--force', '--sign', identity, '--options', 'runtime', '--timestamp', '--entitlements', ent, root])
 print(f'signed {len(found)} binaries inside, then the app')
 PY
 codesign --verify --deep --strict --verbose=2 "$APP"
+# Signing has just changed the files of the translator and spirv-cross, which the engine checks against dmsh_chain.lock before it compiles a shader: its check
+# (tool_lock.py) knows a locked tool that is only signed again (dmsh_chain.sections). 0.4.0-beta as first published had an engine without that and no gate here.
 # Gate: the engine's own check of its tools, run from the finished app as a build runs it (nothing may be written into the sealed bundle: -B)
 RT="$APP/Contents/Resources/Runtime"
 if ! out="$(PATH="$RT/bin:$RT/dotnet:/usr/bin:/bin:/usr/sbin:/sbin" PYTHONDONTWRITEBYTECODE=1 "$APP/Contents/Resources/Python/bin/python3" -E -s -B "$RT/nxnative/dm/gfx/tools/tool_lock.py" --check-tools 2>&1)"; then
     echo "$out" >&2; echo "The release app's shader tools do not pass the engine's check: no player could build with this app. Stopped." >&2; exit 1
 fi
 echo "tool check inside the release app: passed"
+# Gate: the chain version this app's sources give is the one in its header (the game program is built with the header; a build that finds another rewrites the header in
+# the build folder, and the app, which reads its own, then calls every finished build unusable: the second 0.4.0-beta build, 2026-11-14)
+hdr="$(sed -n 's/.*DMSH_CHAIN "\([0-9a-f]*\)".*/\1/p' "$RT/nxnative/dm/gfx/nvn/dmsh_chain.h" | head -1)"
+src="$(PATH="$RT/bin:$RT/dotnet:/usr/bin:/bin:/usr/sbin:/sbin" PYTHONDONTWRITEBYTECODE=1 "$APP/Contents/Resources/Python/bin/python3" -E -s -B "$RT/nxnative/dm/gfx/tools/dmsh_chain.py" 2>/dev/null | tail -1)"
+[ -n "$hdr" ] && [ "$hdr" = "$src" ] || { echo "The release app's chain header ($hdr) is not what its sources give ($src). Stopped." >&2; exit 1; }
+echo "chain version inside the release app: $hdr (header and sources agree)"
 codesign --verify --deep --strict "$APP"   # the check wrote nothing into the bundle
 
 submit_notary() {
