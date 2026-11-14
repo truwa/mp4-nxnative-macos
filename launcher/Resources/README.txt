@@ -1,4 +1,4 @@
-MP4 nxnative 0.3.1 beta
+MP4 nxnative 0.4.0 beta
 =======================
 
 MP4 nxnative builds Metroid Prime 4: Beyond from your own copy of the game and plays it natively on an
@@ -23,7 +23,7 @@ What you need
 
 Building
 --------
-The first build compiles about 260,000 shaders for your Mac: about 3 hours on a Mac mini M4.
+The first build compiles about 260,000 shaders for your Mac: about 2.5 hours on a Mac mini M4.
 With Quick start (on by default) you can play after about 10 minutes while the rest compiles in the
 background; you can stop the build and continue later. Your saves stay in the build folder.
 
@@ -41,12 +41,14 @@ Updates
 MP4 nxnative > Check for Updates looks for a newer release, downloads it and replaces the app
 (not while the game or a build runs). After an update the app refreshes the build's game program once, by itself
 (about 30 seconds).
+Updating from 0.3 needs one full rebuild (the shaders are compiled again; Quick start lets you play
+after about 10 minutes). Your saves stay.
 
 Known limits
 ------------
 - Areas past the start of the game compile their shaders in the background during a Quick start build.
-- At higher resolutions the scan visor works, but it may show a few extra scan targets.
-- Short stutters when entering an area for the first time.
+- Short stutters the first time an area loads.
+- Build for iPad / iPhone (Game menu) is experimental; tested on an iPad Air M2 with Quick start.
 - Mods (frame rate, level of detail) are held back for a later release.
 
 Credits

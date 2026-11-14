@@ -6,8 +6,7 @@ Nothing from the game is in this repository or in the app. Not affiliated with o
 
 ## Before you start: this is a beta
 
-Please read this part. MP4 nxnative works, and on a Mac mini M4 the game runs at 60 fps, with some stutters, especially when you enter
-a new room or area. It is still early days.
+Please read this part. MP4 nxnative works, and on a Mac mini M4 the game runs at 60 fps, with occasional short stutters the first time an area loads. It is still early days.
 
 **The whole game hasn't been tested yet.** It has been played up to the beginning of Sol Valley without major issues.
 Past that point you may run into graphical glitches, a crash, or something that looks slightly off. If you do, the log in the app's Play window helps us a lot.
@@ -30,10 +29,11 @@ nxnative does the heavy lifting of running Switch games natively on a Mac. For t
 
 - **Fixes for this game**, including several graphical issues and crashes we found while playing.
 - **Higher resolutions**: 1080p, 1440p, 4K, 5K and 8K, plus two ultrawide sizes.
-- **A scan visor that works at higher resolutions.** At higher sizes the game's scanner used to find nothing; it works again (it may still show a few extra targets).
+- **A scan visor that works, at every resolution.** Steady scan targets and no extra ones.
 - **Quick start** and a faster, multi-process shader build with pause-resume and a time estimate made on your own Mac.
 - **A build that needs much less disk space:** it cleans up as it goes, so it never needs much more than the finished size.
 - **Saves that work on any drive**, including external drives formatted Mac OS Extended or exFAT.
+- **Experimental: Build for iPad / iPhone** from a finished Mac build (tested on an iPad Air M2 with Quick start).
 - **A Mac app around it all**: it finds your game files (also from a Ryujinx or Astris setup), checks Xcode, builds, plays and updates itself.
   Its settings cover resolution, controllers, a picture Fill mode, an on-screen overlay with the resolution and frame rate, the Metal HUD and macOS Game Mode.
 
