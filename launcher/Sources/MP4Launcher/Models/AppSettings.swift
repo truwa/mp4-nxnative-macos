@@ -408,8 +408,33 @@ final class AppSettings {
     var neededBytes: Int64 {
         let gb = Int64(testBuild ? Self.testBuildEstimate : (Self.storageEstimates[storage] ?? (80, 65)).building)
         let GB: Int64 = 1_000_000_000   // decimal, as shown (ByteCountFormatter .file); it was GiB (<< 30), so 100 read as "107.37 GB"
+        if rebuildReplacesBuild { return max(gb * GB - oldBuildBytes, GB) }   // a new build, in the space the old build gives back first
         if gameReady && !testBuild && !buildUnfinished { return GB }   // a finished build: only a tools update (a playable quick-start build still needs the rest)
         return (stepDone("romfs") ? max(gb - 28, 10) : gb) * GB   // the game data (28 GB) is already there
+    }
+    /// The finished build cannot be loaded by this app's game program (another shader chain or an earlier build format): the Build window's "Discard and build"
+    /// removes it and builds as a new build in the same folder (nx_build.py --discard-old; user, 2026-11-14: the 0.3 -> 0.4 update reused nothing of the old build,
+    /// kept its files beside the new ones, 105 GB at the peak, and left 16 GB behind)
+    var rebuildReplacesBuild: Bool { gameReady && !testBuild && !buildUnfinished && rebuildRequired }
+    /// What that removes, in bytes (nx_build.py DISCARD): measured once per build (a few thousand files)
+    private static var oldBuildCache: (key: String, bytes: Int64)?
+    var oldBuildBytes: Int64 {
+        guard rebuildReplacesBuild else { return 0 }
+        let key = workURL.path + "|" + (builtDate ?? "")
+        if let c = Self.oldBuildCache, c.key == key { return c.bytes }
+        let fm = FileManager.default; var n: Int64 = 0
+        var dirs = ["extract", "shader", "tools", "tmp", "font", "MP4 Game.app", "run/temp"].map { workURL.appendingPathComponent($0) }
+        dirs += ((try? fm.contentsOfDirectory(at: workURL, includingPropertiesForKeys: nil)) ?? []).filter { $0.lastPathComponent.hasPrefix("patched_") }
+        dirs += ((try? fm.contentsOfDirectory(at: workURL.appendingPathComponent("run"), includingPropertiesForKeys: nil)) ?? []).filter { $0.lastPathComponent.hasPrefix("pso_archive") }
+        for dir in dirs {
+            if let v = try? dir.resourceValues(forKeys: [.fileSizeKey, .isRegularFileKey]), v.isRegularFile == true { n += Int64(v.fileSize ?? 0); continue }
+            guard let e = fm.enumerator(at: dir, includingPropertiesForKeys: [.fileSizeKey, .isRegularFileKey]) else { continue }
+            for case let u as URL in e {
+                if let v = try? u.resourceValues(forKeys: [.fileSizeKey, .isRegularFileKey]), v.isRegularFile == true { n += Int64(v.fileSize ?? 0) }
+            }
+        }
+        Self.oldBuildCache = (key, n)
+        return n
     }
     var freeBytes: Int64? {
         var url = rootURL

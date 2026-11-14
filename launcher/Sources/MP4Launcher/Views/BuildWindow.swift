@@ -127,6 +127,10 @@ private struct Checklist: View {
                 } else if s.buildPartial {   // playable: Play now is the default (blue) button, Continue building the plain one (user, 2026-11-09)
                     Button("Play now") { openPlay() }.keyboardShortcut(.defaultAction).controlSize(.large)
                     Button("Continue building") { start() }.controlSize(.large).disabled(blocker != nil)
+                } else if s.rebuildReplacesBuild {   // one button for the update that needs a new build: no dialog after it, the warning above says what happens
+                    Button("Discard and build") { model.build.start(settings: s, mode: .rebuild) }
+                        .keyboardShortcut(.defaultAction).controlSize(.large)
+                        .disabled(blocker != nil || model.play.isRunning)
                 } else {
                     Button(s.buildUnfinished ? "Continue building" : "Start building") { start() }
                         .keyboardShortcut(.defaultAction).controlSize(.large)
@@ -181,7 +185,9 @@ private struct Checklist: View {
             #if TOOLS_UPDATE_BUTTON
             Text("Update tools takes a few seconds. Build from scratch merges the game data again (several minutes). Your saves, keys and prepared shaders are kept either way.")
             #else
-            Text("Building again redoes only what changed: every step whose inputs are the same is reused, and finished shaders are kept. Your saves and keys stay.")
+            Text(s.rebuildReplacesBuild
+                 ? "This version needs a new build. The old build is discarded first (\(s.oldBuildBytes.bytesText) of shaders and pipelines); only your saves, keys and settings stay. To go back to the previous version later, copy the build folder somewhere else first."
+                 : "Building again redoes only what changed: every step whose inputs are the same is reused, and finished shaders are kept. Your saves and keys stay.")
             #endif
         }
     }
@@ -261,13 +267,27 @@ private struct Checklist: View {
 
     // MARK: Rows
 
-    private var needsDumps: Bool { !s.stepDone("code") || !s.stepDone("romfs") }
+    private var needsDumps: Bool { !s.stepDone("code") || !s.stepDone("romfs") || (s.rebuildReplacesBuild && rememberedDumps.count < 2) }
+    /// The game files the last build read (the links in <game folder>/inputs) that can still be read, the larger first: the base game, then the update.
+    /// A new build after "Discard and build" extracts the game from them again (nx_build.py --discard-old refuses to discard anything without them)
+    private var rememberedDumps: [URL] {
+        let fm = FileManager.default
+        func size(_ u: URL) -> Int { (try? u.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0 }
+        return ((try? fm.contentsOfDirectory(at: s.cacheURL.appendingPathComponent("inputs"), includingPropertiesForKeys: nil)) ?? [])
+            .map { $0.resolvingSymlinksInPath() }.filter { fm.isReadableFile(atPath: $0.path) }.sorted { size($0) > size($1) }
+    }
+    /// The discard case with nothing chosen anew: the row shows the remembered file (0: base game, 1: update), or nil
+    private func remembered(_ i: Int, chosen: String) -> String? {
+        guard s.rebuildReplacesBuild, chosen.isEmpty, rememberedDumps.count >= 2 else { return nil }
+        return "From the last build: \(rememberedDumps[i].lastPathComponent)"
+    }
 
     private var baseRow: some View {
         let (st, detail) = check(path: s.basePath, want: .base, error: baseError,
                                  empty: "Not chosen. Drop your .xci or .nsp here")
-        return CheckRow(status: needsDumps ? st : (st == .ok ? .ok : .info), title: "Base game",
-                        detail: needsDumps ? detail : (st == .ok ? detail : "Not needed: the game data is already built"),
+        let rem = remembered(0, chosen: s.basePath)
+        return CheckRow(status: rem != nil ? .ok : needsDumps ? st : (st == .ok ? .ok : .info), title: "Base game",
+                        detail: rem ?? (needsDumps ? detail : (st == .ok ? detail : "Not needed: the game data is already built")),
                         onDrop: { take($0, as: .base) }) {
             Button("Choose…") { if let u = Panels.choose("Choose the base game", types: ["xci", "nsp"]) { take(u, as: .base) } }
         }
@@ -276,8 +296,9 @@ private struct Checklist: View {
     private var updateRow: some View {
         let (st, detail) = check(path: s.updatePath, want: .update, error: updateError,
                                  empty: "Not chosen. Drop the 1.1.0 update (.nsp) here")
-        return CheckRow(status: needsDumps ? st : (st == .ok ? .ok : .info), title: "1.1.0 update",
-                        detail: needsDumps ? detail : (st == .ok ? detail : "Not needed: the game data is already built"),
+        let rem = remembered(1, chosen: s.updatePath)
+        return CheckRow(status: rem != nil ? .ok : needsDumps ? st : (st == .ok ? .ok : .info), title: "1.1.0 update",
+                        detail: rem ?? (needsDumps ? detail : (st == .ok ? detail : "Not needed: the game data is already built")),
                         onDrop: { take($0, as: .update) }) {
             Button("Choose…") { if let u = Panels.choose("Choose the 1.1.0 update", types: ["nsp"]) { take(u, as: .update) } }
         }
@@ -297,7 +318,9 @@ private struct Checklist: View {
         let free = s.freeBytes, need = s.neededBytes
         let enough = (free ?? Int64.max) >= need
         let detail = "\(displayPath(s.rootURL.path)) · " + (free.map { "\($0.bytesText) free" } ?? "free space unknown")
-            + ", about \(need.bytesText) needed"
+            + (s.rebuildReplacesBuild
+               ? " · the new build needs about \((AppSettings.storageEstimates[s.storage] ?? (80, 65)).building) GB; discarding the old one frees \(s.oldBuildBytes.bytesText) first"
+               : ", about \(need.bytesText) needed")
         return CheckRow(status: enough ? .ok : .missing, title: "Build folder", detail: detail) {
             Button("Change…") {
                 if let u = Panels.choose("Choose the build folder", folders: true) { chooseRoot(u) }
@@ -406,15 +429,26 @@ private struct Checklist: View {
             Image(systemName: s.rebuildRequired ? "exclamationmark.triangle.fill" : "sparkles")
                 .foregroundStyle(s.rebuildRequired ? Color.orange : Color.accentColor).font(.title3)
             VStack(alignment: .leading, spacing: 3) {
-                Text(s.rebuildRequired ? "Rebuild required" : "Rebuild recommended").font(.headline)
+                Text(s.rebuildReplacesBuild ? "A whole new build is required" : s.rebuildRequired ? "Rebuild required" : "Rebuild recommended").font(.headline)
+                if s.rebuildReplacesBuild {   // this app cannot load the old build: it goes first, then a new build (user, 2026-11-14)
+                    Text("This version cannot use the old build: the game has to be built again from the start. The full build takes about 2.5 hours on a Mac mini M4. With Quick start, the start of the game (up to the desert)"
+                         + " is playable after about 15 minutes. If your save is further along, wait for the full build: until then, later areas stutter.")
+                        .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    Text("The old build is discarded first (\(s.oldBuildBytes.bytesText)). Only your saves, keys and settings stay."
+                         + " If you may want to go back to the previous version, copy the build folder somewhere else before you start.")
+                        .font(.callout).fixedSize(horizontal: false, vertical: true)
+                } else {
                 Text((s.rebuildNote.isEmpty ? "This version of the app builds the game data in an improved way." : s.rebuildNote)
                      + (f.estimate.isEmpty ? "" : " Takes \(f.estimate).")
                      + " Your saves, keys and prepared shaders are kept.")
                     .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                }
             }
             Spacer()
-            Button("Rebuild") { model.build.start(settings: s, mode: .rebuild) }
-                .controlSize(.large).disabled(model.play.isRunning)
+            if !s.rebuildReplacesBuild {   // the discard case has one button: the window's main one, below
+                Button("Rebuild") { model.build.start(settings: s, mode: .rebuild) }
+                    .controlSize(.large).disabled(model.play.isRunning)
+            }
         }
         .padding(12)
         .background((s.rebuildRequired ? Color.orange : Color.accentColor).opacity(0.1), in: RoundedRectangle(cornerRadius: 10))
@@ -423,8 +457,8 @@ private struct Checklist: View {
     // MARK: Start
 
     private var existingNote: String? {
-        if s.gameReady && !s.buildUnfinished && s.rebuildRequired {
-            return "This folder already has a build (1.1.0, built \(shortDate(s.builtDate)), runtime \(s.builtRuntimeVersion ?? "?")). Building again keeps your saves and prepared shaders; you'll be asked first."
+        if s.gameReady && !s.buildUnfinished && s.rebuildRequired && !s.rebuildReplacesBuild {
+            return "This folder already has a build (1.1.0, built \(shortDate(s.builtDate)), runtime \(s.builtRuntimeVersion ?? "?")). Building again keeps your saves\(s.rebuildReplacesBuild ? "" : " and prepared shaders"); you'll be asked first."
         }
         return nil   // a playable finished build: the status line says it; an unfinished one: continueBox says it
     }
@@ -603,7 +637,7 @@ private struct BuildProgress: View {
                 Text("Estimating the build time…").font(.largeTitle.weight(.semibold))
                 Text((b.message.isEmpty ? "Preparing the game files" : b.message) + " · about 3 min").foregroundStyle(.secondary)
             } else {
-            Text(b.mode == .updateTools ? "Updating the tools" : b.mode == .rebuild ? "Rebuilding" : "Building").font(.title2.weight(.semibold))
+            Text(b.mode == .updateTools ? "Updating the tools" : b.mode == .rebuild && !b.isNewBuild ? "Rebuilding" : "Building").font(.title2.weight(.semibold))
             Text(b.message.isEmpty ? BuildController.steps[b.stepIndex].title : b.message).foregroundStyle(.secondary)
             }
         }
@@ -666,7 +700,7 @@ private struct BuildProgress: View {
         HStack {
             switch b.state {
             case .running:
-                Text(b.playable ? "The game can be played now; the other shaders compile in the background." : "Stop or quit any time: the next start continues where it stopped.").font(.caption).foregroundStyle(.secondary)
+                Text(b.playable ? "The game can be played now; the other shaders compile in the background. Later areas stutter until the build finishes." : "Stop or quit any time: the next start continues where it stopped.").font(.caption).foregroundStyle(.secondary)
                 Spacer()
                 if b.playable { Button("Play now") { openPlay() }.keyboardShortcut(.defaultAction) }
                 Button("Pause") { b.pause() }

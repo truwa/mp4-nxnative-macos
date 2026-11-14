@@ -54,6 +54,8 @@ final class BuildController {
     private(set) var estimateSeconds: Int?
     /// The fresh build's first minutes: the game files and a sample of the shaders, which give the estimate (PHASE estimating … PHASE building)
     private(set) var estimating = false
+    /// A rebuild that discards the old build first runs as a new build: the progress view's title says "Building"
+    private(set) var isNewBuild = false
     /// Each long step's own count (COUNT <step> <done> <total>: shaders, pipelines), for the Build window's rows
     private(set) var counts: [String: (done: Int, total: Int)] = [:]
     /// The build was started with quick start (its first part's counts are the quick-start set)
@@ -104,6 +106,8 @@ final class BuildController {
     func start(settings: AppSettings, mode: Mode) {
         guard !isRunning else { return }
         self.mode = mode
+        let discardOld = mode == .rebuild && settings.rebuildReplacesBuild   // read before anything of the old build is touched
+        isNewBuild = discardOld
         log.clear()
         state = .running; stepID = "start"; percent = 0; message = "Starting"; sawDone = false; sawError = nil; playable = false; etaOverride = nil
         elapsedBefore = 0; estimateSeconds = nil; estimating = false; counts = [:]; quickStart = settings.quickStart && !settings.testBuild
@@ -120,6 +124,7 @@ final class BuildController {
         if mode == .fromScratch {   // the game data and code again; saves, keys, packs and shaders stay
             try? fm.removeItem(at: settings.stampsURL)
             try? fm.removeItem(at: settings.readyURL)
+        } else if discardOld {   // nx_build.py --discard-old removes the old build itself, after it has checked that the game files can be read
         } else if mode == .rebuild {   // the steps this version's build format lists (assets/build-format.json)
             for step in settings.runtimeBuildFormat.redo { try? fm.removeItem(at: settings.stampsURL.appendingPathComponent(step)) }
             try? fm.removeItem(at: settings.readyURL)
@@ -140,9 +145,10 @@ final class BuildController {
         args += ["--storage", settings.storage]
         if settings.testBuild { args.append("--test") } else if settings.quickStart { args.append("--quick-start") }
         if settings.threadsOnly { args.append("--threads-only") }
+        if discardOld { args.append("--discard-old") }
         if mode == .updateTools { args.append("--update-program") }   // only the game program, into a finished build of an earlier app version
         args += ["--priority", priority]
-        record("$ nx_build.py " + (mode == .updateTools ? "(update tools)" : mode == .fromScratch ? "(from scratch)" : mode == .rebuild ? "(rebuild: \(settings.runtimeBuildFormat.redo.joined(separator: ", ")))" : "(continue)")
+        record("$ nx_build.py " + (mode == .updateTools ? "(update tools)" : mode == .fromScratch ? "(from scratch)" : discardOld ? "(discard the old build, then a new build)" : mode == .rebuild ? "(rebuild: \(settings.runtimeBuildFormat.redo.joined(separator: ", ")))" : "(continue)")
                + " · app \(AppSettings.appVersion) · runtime \(settings.runtimeVersion ?? "?")")
 
         let r = ProcessRunner(executable: settings.pythonURL, arguments: args,

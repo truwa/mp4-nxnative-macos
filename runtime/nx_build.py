@@ -272,6 +272,57 @@ def chain_of(repo):
     return m.group(1) if m else None
 
 
+def other_version_files(work, chain):
+    """What a build of another shader chain left that this app's game program cannot use: its shader libraries (shader/cache/b-<other chain>…), its compile cache
+    (cas.db: no entry of it is hit by the new chain's build) and its pipelines (run/pso_archive*, made from those libraries). → the paths, or [] when the folder has no
+    such build or already holds a library of this chain (a rebuild that is under way, or done: its cache and pipelines are this chain's)"""
+    cache = work / 'shader/cache'
+    if not chain or not cache.is_dir(): return []
+    libs = [p for p in cache.glob('b-*')]
+    old = [p for p in libs if p.name.split('.')[0] != f'b-{chain}']
+    if not old or len(old) != len(libs): return []
+    return old + [q for x in ('', '-wal', '-shm', '-journal') for q in [cache / ('cas.db' + x)] if q.exists()] + sorted((work / 'run').glob('pso_archive*'))
+
+
+DISCARD = ('extract', 'patched_*', 'shader', 'tools', 'tmp', 'font', 'MP4 Game.app', 'run/pso_archive*', 'run/temp')
+
+def discard_old_build(game, work):
+    """An update whose game program cannot load the existing build (--discard-old, the Build window's "Discard and build"; user, 2026-11-14): the old build's
+    products go first and the build then runs as a new one in the same folder, so it needs a new build's space and time and leaves nothing behind. Removed: the
+    extracted game data, the rewritten code, every shader library, the compile cache, the split packages, the pipelines, the game program, the step stamps and
+    ready.json. Kept: the saves (user-data), the keys, the settings, the links to the game files, the logs, the player's cheats and play record (anything not
+    listed in DISCARD). The caller has checked that the game files can be read. → bytes freed"""
+    freed = 0
+    for pat in DISCARD:
+        for p in sorted(work.glob(pat)):
+            try:
+                if p.is_dir() and not p.is_symlink():
+                    freed += sum(f.lstat().st_size for f in p.rglob('*') if f.is_file() and not f.is_symlink()); shutil.rmtree(p, ignore_errors=True)
+                else: freed += p.lstat().st_size; p.unlink()
+            except OSError as e: log(f'the old build: {p.name} could not be removed ({e})')
+    shutil.rmtree(game / '.stamps', ignore_errors=True); (game / '.stamps').mkdir(exist_ok=True)
+    for n in ('ready.json',):
+        try: (game / n).unlink()
+        except OSError: pass
+    log(f'the old build was discarded ({freed / 1e9:.1f} GB): this version cannot use it; the saves, keys and settings stay')
+    return freed
+
+
+def clear_other_version(work, chain):
+    """A rebuild for a new shader chain starts as a new build in the same folder (user, 2026-11-14): the update from 0.3 to 0.4 reused nothing of the old build's shaders,
+    cache or pipelines, kept them beside the new ones (the folder peaked at 105 GB instead of a new build's 68 GB) and left 16 GB of old pipelines behind. They are removed
+    first; the saves, keys, settings, game data and split packages stay. With no cache left the build takes its own time estimate, as a new build does. → bytes freed"""
+    freed = 0
+    for p in other_version_files(work, chain):
+        try:
+            if p.is_dir() and not p.is_symlink():
+                freed += sum(f.stat().st_size for f in p.rglob('*') if f.is_file()); shutil.rmtree(p, ignore_errors=True)
+            else: freed += p.stat().st_size; p.unlink()
+        except OSError as e: log(f'the old build: {p.name} could not be removed ({e})')
+    if freed: log(f"the old build's shaders, compile cache and pipelines were removed ({freed / 1e9:.1f} GB): this version cannot use them")
+    return freed
+
+
 def slim_library(work, chain, storage, say=log):
     """A finished build's library image without the shader sources (.metal, ~20 GB for this game), which the game never reads, written again with identical files stored
     once (shader_lib.write); full keeps the sources. Only for a finished build: a running or stopped build checks each shader's source to know it is done. Returns bytes freed"""
@@ -550,6 +601,7 @@ def main():
     ap.add_argument('--quick-start', action='store_true'); ap.add_argument('--test', action='store_true')
     ap.add_argument('--until-split', action='store_true', help='only the quick steps (game data, rewrite, split), then exit: the speed test\'s shader packages')
     ap.add_argument('--estimate-first', action='store_true', help='kept for older apps: every fresh build now estimates itself (see the in-build estimate)')
+    ap.add_argument('--discard-old', action='store_true', help='the existing build is of a version this app cannot load: remove its products first, then build as a new build (saves, keys, settings and the links to the game files stay)')
     ap.add_argument('--optimise', action='store_true', help='give back what a finished build no longer needs (an earlier app\'s build), then exit')
     ap.add_argument('--update-program', action='store_true', help='a build made with an earlier app of the same shader chain: build only the game program with this app\'s tools, then exit')
     ap.add_argument('--check-ready', action='store_true', help='read only: whether this folder holds a playable build (ready.json missing or not); prints READY finished|partial|none <reason>')
@@ -615,6 +667,14 @@ def main():
                )
     if a.update_program:   # a finished build made with an earlier app: only the game program again (build_mac_host: ~30 s on the M4), nothing else touched
         return update_program(game, work, repo, rt, py, env)
+    if a.discard_old and not a.until_split:
+        # Nothing is removed before the game files are known to be readable: the new build extracts them again
+        have = [p for p in (inputs.iterdir() if inputs.is_dir() else []) if p.exists()]
+        if len(have) < 2 or not all(os.access(p, os.R_OK) for p in have):
+            out('ERROR The game files (the base game and the 1.1.0 update) cannot be read where they were. Choose them again, then build: the old build is still here.'); return 1
+        out('PROGRESS read 0 Discarding the old build')
+        discard_old_build(game, work)
+    elif not a.until_split: clear_other_version(work, chain_of(repo))   # another shader chain's unfinished build: its shaders, cache and pipelines go first
     # The shader step: a worker process per core by default (dmsh_build.py's DMSH_PROCS = cores; the speed test on the M4, 2026-11-08: ~1/3 faster than threads)
     env['DMSH_PROCS'] = '0' if a.threads_only else str(os.cpu_count() or 8)
     log(f"shader step: {'threads only' if a.threads_only else env['DMSH_PROCS'] + ' worker processes'}")

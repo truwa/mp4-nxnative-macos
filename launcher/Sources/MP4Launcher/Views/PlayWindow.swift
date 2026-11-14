@@ -142,7 +142,8 @@ struct PlayWindow: View {
             return Status(text: "The game isn't built yet", symbol: "hammer", buttons: [("Build", showBuild)])
         }
         if s.rebuildRequired {
-            return Status(text: "This version needs the game rebuilt" + (s.runtimeBuildFormat.estimate.isEmpty ? "" : " (\(s.runtimeBuildFormat.estimate))"),
+            return Status(text: s.rebuildReplacesBuild ? "This version needs a whole new build. The Build window has the details."
+                                : "This version needs the game rebuilt" + (s.runtimeBuildFormat.estimate.isEmpty ? "" : " (\(s.runtimeBuildFormat.estimate))"),
                           symbol: "hammer", buttons: [("Open Build", showBuild)])
         }
         if model.play.endedUnexpectedly {
@@ -212,7 +213,7 @@ struct ShaderPanel: View {
                     Text("Not finished" + (s.shadersDone.map { " · \($0.done.formatted()) of \($0.total.formatted())" } ?? "")).foregroundStyle(.secondary).monospacedDigit()
                     Button("Continue building") { b.start(settings: s, mode: .continueBuild) }.controlSize(.small).disabled(model.play.isRunning)
                 } else {
-                    Text(s.gameReady ? "Compiled by the build ✓" : "Compiled when you build the game").foregroundStyle(.secondary)
+                    Text(s.rebuildReplacesBuild ? "From an earlier version: compiled again by the new build" : s.gameReady ? "Compiled by the build ✓" : "Compiled when you build the game").foregroundStyle(.secondary)
                 }
             }
         }
