@@ -21,6 +21,9 @@ enum QuitGuard {
         if model.build.isRunning {
             return ("A build is running", "Closing stops it; Start building continues it later.", "Stop build and close")
         }
+        if model.iosBuild.isRunning {
+            return ("The iPad build is running", "Closing stops it; Build again starts it over (finished shaders are kept).", "Stop iPad build and close")
+        }
         return nil
     }
 
@@ -42,8 +45,9 @@ enum QuitGuard {
     static func stopAll(_ model: AppModel, then done: @escaping () -> Void) {
         if model.play.isRunning { model.play.stop() }
         if model.build.isRunning { model.build.cancel() }
+        if model.iosBuild.isRunning { model.iosBuild.cancel() }
         func wait(_ tries: Int) {
-            if (!model.play.isRunning && !model.build.isRunning) || tries == 0 { done(); return }
+            if (!model.play.isRunning && !model.build.isRunning && !model.iosBuild.isRunning) || tries == 0 { done(); return }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { wait(tries - 1) }
         }
         wait(30)

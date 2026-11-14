@@ -49,6 +49,13 @@ struct MP4LauncherApp: App {
         .restorationBehavior(.disabled)
         .defaultLaunchBehavior(model.settings.gameReady && !model.settings.buildUnfinished ? .suppressed : .presented)   // an unfinished build opens here, with Continue
 
+        Window("MP4 nxnative – Build for iPad / iPhone", id: "iosbuild") {   // Game menu; the Build window stays as it is (user, 2026-11-12)
+            IOSBuildWindow().environment(model)
+        }
+        .windowResizability(.contentSize)
+        .restorationBehavior(.disabled)
+        .defaultLaunchBehavior(.suppressed)
+
         Window("MP4 nxnative – Build speed test", id: "speedtest") {
             SpeedTestWindow().environment(model)
         }
@@ -96,6 +103,8 @@ struct GameMenu: View {
         Divider()
 #endif
         Button("Speed Test…") { openWindow(id: "speedtest") }
+        Divider()
+        Button("Build for iPad / iPhone…") { openWindow(id: "iosbuild") }   // experimental: an unsigned IPA and the game file in a folder
     }
 }
 

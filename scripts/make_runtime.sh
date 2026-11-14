@@ -8,7 +8,7 @@ W="${W:-$( [ -d /Volumes/MACDATA ] && echo /Volumes/MACDATA/mp4-app.noindex || e
 R="$W/Runtime"; NX="${NX_DIR:-nxnative}"; REF="${NX_REF:-mp4-record}"
 DOTNET="${DOTNET_HOME:-$( [ -d /opt/homebrew/opt/dotnet/libexec ] && echo /opt/homebrew/opt/dotnet/libexec || echo /usr/local/share/dotnet )}"   # Homebrew's, else the official installer's (the M4)
 rm -rf "$R" && mkdir -p "$R/bin" "$R/nxnative"
-cp runtime/nx_build.py runtime/nx_play.py runtime/nx_speedtest.py runtime/recorded_shaders.txt runtime/build-format.json runtime/shader-profile.tsv "$R/"
+cp runtime/nx_build.py runtime/nx_build_ios.py runtime/nx_play.py runtime/nx_speedtest.py runtime/recorded_shaders.txt runtime/build-format.json runtime/shader-profile.tsv "$R/"
 cp runtime/bin/zstd "$R/bin/" && chmod +x "$R/bin/zstd"
 # The nxnative tree at $REF (NX_REF=WORKTREE: the working tree as it is, tracked and new files, for testing uncommitted work): other games' profiles, docs and tests left out.
 set -f   # the patterns below are for tar, not the shell

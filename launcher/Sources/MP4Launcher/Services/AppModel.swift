@@ -9,6 +9,8 @@ final class AppModel {
     let settings = AppSettings()
     let build = BuildController()
     let play = PlayController()
+    /// Game menu > Build for iPad / iPhone… (experimental, IOSBuildWindow)
+    let iosBuild = IOSBuildController()
     let shaders = ShaderPrepController()
     /// "DualSense Wireless Controller connected", or "No controller, keyboard".
     private(set) var controllerLine = "No controller, keyboard"
